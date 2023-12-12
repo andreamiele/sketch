@@ -2,8 +2,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-
-import builders
 import math
 
 class PositionalEncoding(nn.Module):
@@ -45,7 +43,7 @@ class SelfAttentionBottleneck(nn.Module):
 
 
 class Sketchformer(nn.Module):
-     def __init__(self, config):
+    def __init__(self, config):
         super(Sketchformer, self).__init__()
         self.config = config
         self.vocab_size = config["vocab_size"]
