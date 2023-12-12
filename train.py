@@ -29,7 +29,7 @@ def main():
     # Set up GPU
     device = torch.device(f"cuda:{args.gpu}" if torch.cuda.is_available() else "cpu")
 
-    dataset = SketchDataloader(args.dataset)
+    dataset = SketchDataloader('quickdraw')
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True)
 
     # Initialize the model
