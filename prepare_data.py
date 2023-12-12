@@ -2,8 +2,9 @@ import os
 import numpy as np
 import argparse
 from sklearn.cluster import KMeans
-from utils.helpers import Timer, save_pickle
 import pickle
+
+from datetime import timedelta, datetime
 def save_pickle(path, obj):
     """
     simple method to save a picklable object
@@ -13,6 +14,23 @@ def save_pickle(path, obj):
     """
     with open(path, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+
+
+class Timer(object):
+
+    def __init__(self):
+        self.start_t = time.time()
+        self.last_t = self.start_t
+
+    def time(self, lap=False):
+        end_t = time.time()
+        if lap:
+            out = timedelta(seconds=int(end_t - self.last_t))  # count from last stop point
+        else:
+            out = timedelta(seconds=int(end_t - self.start_t))  # count from beginning
+        self.last_t = end_t
+        return out
+
 
 def load_data(data_dir, class_names):
     """
@@ -26,7 +44,7 @@ def load_data(data_dir, class_names):
         file_path = os.path.join(data_dir, f'{class_name}.npz')
         if os.path.exists(file_path):
             data = np.load(file_path, encoding='latin1', allow_pickle=True)
-            samples = data[class_name]
+            samples = data['train']
             for sketch in samples:
                 sketch = normalize_sketch(sketch)
                 pen_lift_ids = np.where(sketch[:, 2] == 1)[0] + 1
@@ -58,7 +76,7 @@ def get_bounds(sketch):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Build a dictionary of sketch tokens')
-    parser.add_argument('--data-dir', type=str, help='Directory containing .npz files')
+    parser.add_argument('--data-dir', type=str, default='/content/quickdraw', help='Directory containing .npz files')
     parser.add_argument('--class-list', type=str, help='List of class names')
     parser.add_argument('--vocab-size', type=int, default=1000, help='Vocabulary size')
     parser.add_argument('--num-samples', type=int, default=5000000, help='Number of samples')
@@ -66,12 +84,11 @@ if __name__ == '__main__':
     parser.add_argument('--target-file', type=str, default='token_dict.pkl', help='Output token dictionary file')
 
     args = parser.parse_args()
-
+    timer = Timer()
     class_names = []
     with open(args.class_list) as clf:
         class_names = clf.read().splitlines()
 
-    timer = Timer()
     print("Loading data ...")
     data_p0, data_p1 = load_data(args.data_dir, class_names)
     N_P0, N_P1 = data_p0.shape[0], data_p1.shape[0]
@@ -91,9 +108,8 @@ if __name__ == '__main__':
     data = np.r_[data_p0, data_p1]
 
     N = data.shape[0]
-    print("Loading data done, took {}".format(timer.time(True)))
     print("Building dictionary ...")
-    cluster = KMeans(n_clusters=args.vocab_size, n_init=10, max_iter=500, tol=1e-6, n_jobs=-1, verbose=0).fit(data)
+    cluster = KMeans(n_clusters=args.vocab_size, n_init=10, max_iter=300, tol=1e-6).fit(data)
     print("Dictionary built: {}".format(timer.time(True)))
     save_pickle(args.target_file, cluster)
     print("Total time: {}".format(timer.time(False)))
