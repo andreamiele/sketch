@@ -1,0 +1,4 @@
+!gsutil -m cp "gs://quickdraw_dataset/sketchrnn/The Eiffel Tower.npz" /home/ml4science2023/GAN/sketch/quickdraw
+!gsutil -m cp "gs://quickdraw_dataset/sketchrnn/skull.npz" /home/ml4science2023/GAN/sketch/quickdraw
+!gsutil -m cp "gs://quickdraw_dataset/sketchrnn/church.npz" /home/ml4science2023/GAN/sketch/quickdraw
+!gsutil -m cp "gs://quickdraw_dataset/sketchrnn/sun.npz" /home/ml4science2023/GAN/sketch/quickdraw

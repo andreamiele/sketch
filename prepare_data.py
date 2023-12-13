@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import argparse
-from sklearn.cluster import KMeans
+from sklearn.cluster import MiniBatchKMeans
 import pickle
-
+import time
 from datetime import timedelta, datetime
 def save_pickle(path, obj):
     """
@@ -44,7 +44,12 @@ def load_data(data_dir, class_names):
         file_path = os.path.join(data_dir, f'{class_name}.npz')
         if os.path.exists(file_path):
             data = np.load(file_path, encoding='latin1', allow_pickle=True)
-            samples = data['train']
+            total_samples = data['train']
+            total_samples = len(data['train'])
+            quarter_samples = total_samples // 4  # Integer division to get a quarter of the total
+
+            # Take the first quarter of the samples
+            samples = data['train'][:quarter_samples]
             for sketch in samples:
                 sketch = normalize_sketch(sketch)
                 pen_lift_ids = np.where(sketch[:, 2] == 1)[0] + 1
@@ -109,7 +114,8 @@ if __name__ == '__main__':
 
     N = data.shape[0]
     print("Building dictionary ...")
-    cluster = KMeans(n_clusters=args.vocab_size, n_init=10, max_iter=300, tol=1e-6).fit(data)
+    cluster = MiniBatchKMeans(n_clusters=args.vocab_size, max_iter=200, compute_labels=False,
+                                   verbose=1, n_init=5).fit(data)
     print("Dictionary built: {}".format(timer.time(True)))
     save_pickle(args.target_file, cluster)
     print("Total time: {}".format(timer.time(False)))
