@@ -21,6 +21,8 @@ import torch.optim as optim
 import math
 import json
 
+print("Script started")
+print(time.time)
 def check_ndarray_range(ndarray):
     min_val = np.min(ndarray)
     max_val = np.max(ndarray)
@@ -364,42 +366,37 @@ class Sketchformer(nn.Module):
         self.output_layer = nn.Linear(self.d_model, self.vocab_size)
 
     def forward(self, src, tgt, src_mask=None, tgt_mask=None, memory_mask=None,
-                src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
-          # Convert src and tgt to long type if they are not already
-          src = src.long()
-          tgt = tgt.long()
+            src_key_padding_mask=None, tgt_key_padding_mask=None, memory_key_padding_mask=None):
+      # Convert src and tgt to long type if they are not already
+      src = src.long()
+      tgt = tgt.long()
 
-          # Pass through the sketch embedding layer
-          src_emb = self.sketch_embedding(src) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32))
-          tgt_emb = self.sketch_embedding(tgt) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32))
+      # Create masks for padding tokens
+      PAD_IDX = 0
+      src_key_padding_mask = (src == PAD_IDX)
+      tgt_key_padding_mask = (tgt == PAD_IDX)
 
-          # Remove the unnecessary dimension and ensure src_emb and tgt_emb are 3D tensors
-          src_emb = src_emb.squeeze(2)  # Remove the dimension with size 1
-          tgt_emb = tgt_emb.squeeze(2)  # Remove the dimension with size 1
+      # Create a causal mask for the target, preventing attention to future tokens
+      tgt_mask = torch.triu(torch.ones((tgt.size(1), tgt.size(1)), device=tgt.device).bool(), diagonal=1)
 
-          # Transpose to get the correct shape: [sequence length, batch size, features]
+      # Pass through the sketch embedding layer
+      src_emb = self.sketch_embedding(src) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32))
+      tgt_emb = self.sketch_embedding(tgt) * torch.sqrt(torch.tensor(self.d_model, dtype=torch.float32))
 
-          # Apply positional encoding
-          src_emb = self.pos_encoder(src_emb)
-          tgt_emb = self.pos_encoder(tgt_emb)
+      # Apply positional encoding
+      src_emb = self.pos_encoder(src_emb.transpose(0, 1))
+      tgt_emb = self.pos_encoder(tgt_emb.transpose(0, 1))
 
-            # Initialize memory as None
-          memory = None
-          src_emb = src_emb.transpose(0, 1)
-          tgt_emb = tgt_emb.transpose(0, 1)
-          # Pass through the encoder and decoder
-          memory = self.encoder(src_emb, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+      # Pass through the encoder and decoder
+      memory = self.encoder(src_emb, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+      output = self.decoder(tgt_emb, memory, tgt_mask=tgt_mask,
+                            memory_mask=memory_mask, tgt_key_padding_mask=tgt_key_padding_mask,
+                            memory_key_padding_mask=memory_key_padding_mask)
 
-          # Ensure memory is a 3D tensor for MHA
-          if memory is not None and len(memory.shape) == 4:
-              memory = memory.squeeze(1)
-          output = self.decoder(tgt_emb, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
-                                tgt_key_padding_mask=tgt_key_padding_mask, memory_key_padding_mask=memory_key_padding_mask)
+      # Apply output layer
+      output = self.output_layer(output)
 
-          # Apply output layer
-          output = self.output_layer(output)
-
-          return output
+      return output
 
 
     def print_config(self):
@@ -424,7 +421,7 @@ def load_config(config_path):
 config = load_config("/home/ml4science2023/GAN/sketch/config.json")
 model = Sketchformer(config)
 model.to(device)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(ignore_index=0)
 optimizer = optim.Adam(model.parameters(), lr= 0.001)
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -449,8 +446,13 @@ for epoch in range(num_epochs):
         sos_tensor = torch.full((sketches.size(0), 1, sketches.size(2)), SOS_token, dtype=torch.long, device=device)
         tgt_input = torch.cat([sos_tensor, sketches[:, :-1, :]], dim=1)
 
-        # Forward pass
-        outputs = model(sketches, tgt_input)
+        # Create masks
+        src_mask = (sketches != PAD_IDX).unsqueeze(-2)
+        tgt_mask = (tgt_input != PAD_IDX).unsqueeze(-2)
+        tgt_mask = tgt_mask & torch.triu(torch.ones((tgt_input.size(0), tgt_input.size(1), tgt_input.size(1)), device=device), diagonal=1).bool()
+
+        # Forward pass with masks
+        outputs = model(sketches, tgt_input, src_key_padding_mask=~src_mask, tgt_key_padding_mask=~tgt_mask)
         outputs = outputs.view(-1, outputs.size(-1))
         targets = sketches.view(-1)
         loss = criterion(outputs, targets)
